@@ -1,8 +1,8 @@
 import { ethers } from "ethers";
+import fetch from "node-fetch"; // v2 支持 CommonJS
 import { logInfo } from "./logUtils";
 import { setupProxyAgent } from "./proxyManager";
 import { USDT_ABI, ETH_ABI, BTC_ABI, SWAP_ROUTER_ABI } from "./contractABIs";
-
 
 const RPC_URLS = ["https://evmrpc-testnet.0g.ai"];
 
@@ -29,15 +29,36 @@ export class TradeBot {
     this.provider = this.initProvider();
   }
 
-
   private initProvider(): ethers.JsonRpcProvider {
     const rpc = RPC_URLS[this.rpcIndex];
     if (this.proxy) {
-      ethers.FetchRequest.registerGetUrl(setupProxyAgent(this.proxy, this.accountNum, this.totalAccounts));
+      const agent = setupProxyAgent(this.proxy, this.accountNum, this.totalAccounts);
+      if (agent) {
+        const customFetch: ethers.FetchGetUrlFunc = async (req: ethers.FetchRequest): Promise<ethers.GetUrlResponse> => {
+          const response = (await fetch(req.url, {
+            method: req.method,
+            headers: req.headers,
+            body: req.body ? req.body.toString() : undefined,
+            agent,
+          })) as fetch.Response; // 确保类型为 fetch.Response
+          const bodyBuffer = await response.buffer();
+          const body = new Uint8Array(bodyBuffer);
+          const headers: { [key: string]: string } = {};
+          response.headers.forEach((value, key) => {
+            headers[key] = value; // 直接使用 forEach，无需 raw()
+          });
+          return {
+            statusCode: response.status,
+            statusMessage: response.statusText || "OK",
+            headers,
+            body,
+          };
+        };
+        ethers.FetchRequest.registerGetUrl(customFetch);
+      }
     }
     return new ethers.JsonRpcProvider(rpc);
   }
-
 
   private changeRpc() {
     this.rpcIndex = (this.rpcIndex + 1) % RPC_URLS.length;
@@ -45,9 +66,8 @@ export class TradeBot {
     this.provider = this.initProvider();
   }
 
- 
   private handleError(err: any): boolean {
-    const msg = err.message || err.toString();
+    const msg = err instanceof Error ? err.message : String(err);
     if (msg.toLowerCase().includes("mempool is full")) {
       logInfo(this.accountNum, this.totalAccounts, "内存池已满，重试中...", "warning");
       this.changeRpc();
@@ -56,7 +76,6 @@ export class TradeBot {
     return false;
   }
 
- 
   private async swapTokens(fromAddr: string, toAddr: string, amount: bigint, fromAbi: any) {
     const wallet = new ethers.Wallet(this.key, this.provider);
     const tokenContract = new ethers.Contract(fromAddr, fromAbi, wallet);
@@ -90,7 +109,6 @@ export class TradeBot {
     return { success: true, txHash: receipt.hash, amount: ethers.formatUnits(amount, 18) };
   }
 
-
   async executeUsdtToEthSwap() {
     const amount = ethers.parseUnits((Math.random() * (2 - 0.5) + 0.5).toFixed(2), 18);
     const startTime = new Date().toLocaleString("zh-CN");
@@ -113,11 +131,11 @@ export class TradeBot {
       if (this.handleError(err)) {
         await this.executeUsdtToEthSwap();
       } else {
-        logInfo(this.accountNum, this.totalAccounts, `交易失败: ${err.message}`, "error");
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logInfo(this.accountNum, this.totalAccounts, `交易失败: ${errorMessage}`, "error");
       }
     }
   }
-
 
   async executeUsdtToBtcSwap() {
     const amount = ethers.parseUnits((Math.random() * (2 - 0.5) + 0.5).toFixed(2), 18);
@@ -141,7 +159,8 @@ export class TradeBot {
       if (this.handleError(err)) {
         await this.executeUsdtToBtcSwap();
       } else {
-        logInfo(this.accountNum, this.totalAccounts, `交易失败: ${err.message}`, "error");
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        logInfo(this.accountNum, this.totalAccounts, `交易失败: ${errorMessage}`, "error");
       }
     }
   }
