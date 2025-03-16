@@ -5,9 +5,7 @@ import { HttpsProxyAgent } from "https-proxy-agent";
 import { SocksProxyAgent } from "socks-proxy-agent";
 import { logInfo } from "./logUtils";
 
-
 let proxies: string[] = [];
-
 
 export function initProxies(): boolean {
   try {
@@ -17,21 +15,21 @@ export function initProxies(): boolean {
     console.log(chalk.green(`✓ 已加载 ${proxies.length} 个代理`));
     return true;
   } catch (err) {
-    console.error(chalk.red(`[!] 加载代理失败: ${err.message}`));
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error(chalk.red(`[!] 加载代理失败: ${errorMessage}`));
     return false;
   }
 }
 
-
-export function setupProxyAgent(proxy: string, index: number, total: number) {
+export function setupProxyAgent(proxy: string, index: number, total: number): HttpsProxyAgent<string> | SocksProxyAgent | null {
   try {
     return proxy.startsWith("socks") ? new SocksProxyAgent(proxy) : new HttpsProxyAgent(proxy);
   } catch (err) {
-    logInfo(index, total, `代理创建失败: ${err.message}`, "error");
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    logInfo(index, total, `代理创建失败: ${errorMessage}`, "error");
     return null;
   }
 }
-
 
 export async function fetchRandomProxy(index: number, total: number): Promise<string | null> {
   if (proxies.length === 0) {
@@ -51,7 +49,8 @@ export async function fetchRandomProxy(index: number, total: number): Promise<st
       logInfo(index, total, `使用代理 IP: ${res.data.ip}`, "success");
       return proxy;
     } catch (err) {
-      logInfo(index, total, `代理 ${proxy} 无效: ${err.message}`, "error");
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      logInfo(index, total, `代理 ${proxy} 无效: ${errorMessage}`, "error");
       attempts++;
     }
   }
