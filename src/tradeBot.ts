@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import fetch from "node-fetch"; // v2 支持 CommonJS
+import fetch from "node-fetch"; 
 import { logInfo } from "./logUtils";
 import { setupProxyAgent } from "./proxyManager";
 import { USDT_ABI, ETH_ABI, BTC_ABI, SWAP_ROUTER_ABI } from "./contractABIs";
